@@ -38,9 +38,6 @@ Create a `.env` file in the project root. Populate it with:
 # Your local Amazon domain (e.g., amazon.com, amazon.co.uk)
 AMAZON_URL=https://www.amazon.com
 
-# Optional: Your Amazon account email (if set, avoids one prompt during login)
-# AMAZON_EMAIL=your_email@example.com
-
 # Path where the login script will SAVE and the MCP server will READ the cookie file.
 # Ensure the directory exists if not using the current directory.
 COOKIE_PATH=./alexa_cookie.pickle
