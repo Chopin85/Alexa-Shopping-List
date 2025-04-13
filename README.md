@@ -1,24 +1,25 @@
-# Alexa Shopping List Console Output
+# Alexa Shopping List MCP Server
 
-This project allows incomplete items on your Alexa shopping
-list to be outputted to the console and marked as completed on Alexa.
-It uses Selenium to handle the initial login via a browser window.
+This project provides a [FastMCP](https://github.com/jlowin/fastmcp) server that allows an LLM (like Claude) to interact with your Alexa shopping list via the Model Context Protocol (MCP).
 
 ## Features
 
-- Uses Selenium to open a browser for manual user login (handles 2FA).
-- Saves authentication cookies after successful browser login.
-- Checks Alexa shopping list for incomplete items using saved cookies.
-- Outputs incomplete items to the console.
-- Marks items as completed on Alexa once they are outputted.
-- Periodic execution ensured by python script running in a Docker container.
+- Provides MCP tools to:
+    - Get the current shopping list (`get_list`).
+    - Add one or more items (`add_item`).
+    - Delete one or more items by value (`delete_item`).
+    - Mark one or more items as complete by value (`mark_complete`).
+    - Mark one or more items as incomplete by value (`mark_incomplete`).
+    - Clear all completed items from the list (`clear_completed_items`).
+- Uses Selenium **in a separate step** to handle the initial Amazon login (including 2FA) and save authentication cookies.
+- The MCP server loads the saved cookies to make authenticated API calls.
 
 ## Prerequisites
 
-- Docker and Docker Compose (for running via Docker)
-- Python 3.x and pip (for running locally)
-- **Google Chrome** (or another supported browser) installed on the host machine.
+- Python 3.x and pip.
+- **Google Chrome** (or another supported browser) installed on the host machine for the initial login step.
 - An Amazon account with Alexa enabled.
+- `fastmcp` installed (`pip install fastmcp`).
 
 ## Setup
 
@@ -27,8 +28,7 @@ It uses Selenium to handle the initial login via a browser window.
 ```bash
 pip install -r requirements.txt
 ```
-This will install `requests`, `python-dotenv`, `selenium`, and `webdriver-manager`.
-`webdriver-manager` will automatically download the correct ChromeDriver when the script runs.
+This installs `requests`, `python-dotenv`, `selenium`, `webdriver-manager`, and `fastmcp`.
 
 ### 2. Environment Variables
 
@@ -39,80 +39,77 @@ Create a `.env` file in the project root. Populate it with:
 AMAZON_URL=https://www.amazon.com
 
 # Optional: Your Amazon account email (if set, avoids one prompt during login)
-# AMAZON_EMAIL=
+# AMAZON_EMAIL=your_email@example.com
 
-# Path where the script will SAVE the cookie file (e.g., ./alexa_cookie.pickle)
+# Path where the login script will SAVE and the MCP server will READ the cookie file.
 # Ensure the directory exists if not using the current directory.
 COOKIE_PATH=./alexa_cookie.pickle
 
-# Logging level (DEBUG, INFO, WARNING, ERROR)
+# Logging level for the scripts (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 LOG_LEVEL=INFO
 ```
-*Note: `AMAZON_PASSWORD` and `AMAZON_OTP_SECRET` are no longer used.* Password and 2FA are entered directly in the browser during the Selenium login step.
 
-### 3. Docker Compose (If using Docker)
+### 3. Authentication (Cookie Generation - Run Once or When Needed)
 
-Update the `docker-compose.yml` file:
-1.  Ensure the `COOKIE_PATH` directory is mapped as a volume.
-2.  Consider if you need to run the browser headlessly (may require additional setup in `auth.py` and Dockerfile configuration for a headless browser environment).
+The MCP server itself does **not** handle the browser login. You need to run the `run.py` script to handle the authentication flow and generate the cookie file the server needs.
 
-Example `docker-compose.yml` mapping `./app_data_host` to `/app-data`:
-```yaml
-services:
-  scraper:
-    build: . # Build from Dockerfile
-    restart: unless-stopped
-    container_name: alexa_list_checker
-    env_file:
-      - .env
-    volumes:
-      - .:/usr/src/app # Maps project code
-      # Map a local directory to store the cookie file
-      - ./app_data_host:/app-data
-    command: python run.py
-```
-Make sure the corresponding `.env` has `COOKIE_PATH=/app-data/alexa_cookie.pickle`.
-*Running Selenium (especially non-headless) inside Docker requires careful setup of the Docker image (installing Chrome, drivers, potentially Xvfb). The provided Dockerfile might need adjustments.*
+1.  **Configure `.env`:** Ensure your `.env` file is correctly set up with `AMAZON_URL` and `COOKIE_PATH`.
+2.  **Run the Login Script:** Execute `run.py` from your terminal in the project root directory.
+    ```bash
+    python run.py
+    ```
+3.  **Browser Interaction:**
+    *   The script will inform you it's starting the process.
+    *   If an old cookie file exists at `COOKIE_PATH`, it will be deleted.
+    *   Selenium will download the appropriate WebDriver if needed.
+    *   A browser window (e.g., Chrome) will open to your `AMAZON_URL`.
+    *   **MANUALLY** log in to your Amazon account in that browser window. Enter your email, password, and complete any 2FA steps.
+    *   Once fully logged in on the main Amazon page, switch back to the console where `run.py` is running.
+    *   Press `Enter` in the console.
+4.  **Cookie Saved:** The script extracts cookies and saves them to the path specified by `COOKIE_PATH` in your `.env` file. The browser closes, and the script confirms success or failure.
 
-### 4. Run
+You only need to run `python run.py` when the cookie file doesn't exist or has expired.
 
-**First Run / Login (Requires Browser Interaction):**
-When you run the script for the first time, or if the cookie file (`COOKIE_PATH`) is missing/invalid:
-1. Selenium will automatically download the appropriate WebDriver (e.g., ChromeDriver).
-2. A browser window (e.g., Chrome) will open to your `AMAZON_URL`.
-3. **MANUALLY** log in to your Amazon account in that browser window. Enter your email (if not pre-filled), password, and complete any 2FA steps presented by Amazon.
-4. Once you are fully logged in on the main Amazon page, switch back to the console/terminal where the script is running.
-5. Press `Enter` in the console.
-6. The script will extract the cookies from the browser and save them to `COOKIE_PATH`.
-7. The browser window will close.
+## Running the MCP Server
 
-**Subsequent Runs:**
-If a valid cookie file exists at `COOKIE_PATH`, the script will load it and proceed directly to checking the shopping list without opening a browser.
+Once the cookie file has been successfully generated by `run.py`:
 
-**Running with Docker:**
+### Option 1: Development Mode (Testing)
+
+Use `fastmcp dev` to run the server locally and access the MCP Inspector web UI for manual tool testing.
+
 ```bash
-# Ensure ./app_data_host (or your mapped directory) exists
-mkdir -p ./app_data_host
-# Build the image
-docker-compose build
-# Run (will open browser on host if not headless & configured correctly)
-docker-compose up
-# Or run detached and check logs:
-# docker-compose up -d
-# docker-compose logs -f
+# 1. Run 'python run.py' first if cookie is missing/expired
+# 2. Then run the dev server:
+fastmcp dev src.mcp.mcp_server
 ```
-*Note: Running browser automation in Docker can be complex. You might need to run `docker-compose up` without `-d` initially to see browser interaction.*
+Open the URL provided in your browser.
 
-**Running Locally:**
+### Option 2: Claude Desktop Integration
+
+Use `fastmcp install` to make the server available within the Claude Desktop application.
+
 ```bash
-# Ensure .env file is populated
-# Run the script (will open browser for login if needed)
-python3 run.py
+# 1. Run 'python run.py' first if cookie is missing/expired
+# 2. Then install the server:
+fastmcp install src.mcp.mcp_server --name "Alexa Shopping List"
 ```
+This command handles creating an isolated environment and registering the server.
+
+### Option 3: Direct Execution (Advanced)
+
+Run the server script directly if integrating with a custom application.
+
+```bash
+# 1. Run 'python run.py' first if cookie is missing/expired
+# 2. Then run the server directly:
+python src/mcp/mcp_server.py
+```
+The server will run using the default transport (usually stdio).
 
 ## Troubleshooting
 
-- **WebDriver Errors:** Ensure Google Chrome is installed and up-to-date. `webdriver-manager` usually handles driver versions, but sometimes manual intervention or clearing its cache (`~/.wdm`) might be needed. Check error logs for specifics.
-- **Cookie Extraction Failure:** Make sure you fully complete the login (including 2FA) in the browser *before* pressing Enter in the console.
-- **Docker Issues:** Running Selenium in Docker requires the container to have a browser, the correct driver, and potentially a virtual display (like Xvfb) installed. The base `Dockerfile` may need significant additions for this.
-- **Expired Cookies:** If the script fails to fetch the list after previously working, the cookies might have expired. Delete the cookie file specified by `COOKIE_PATH` and rerun the script to trigger the browser login again.
+- **MCP Server Connection/API Issues:** Ensure `fastmcp` is installed. Verify the cookie file (`COOKIE_PATH`) exists and is valid (regenerate it by running `python run.py`). Check the server logs for errors.
+- **Login/WebDriver Errors (During `python run.py`):** Ensure Google Chrome is installed and up-to-date. `webdriver-manager` usually handles driver versions, but sometimes manual intervention or clearing its cache (`~/.wdm`) might be needed. Check error logs from `run.py`.
+- **Cookie Extraction Failure (During `python run.py`):** Make sure you fully complete the login (including 2FA) in the browser *before* pressing Enter in the console when prompted by `run.py`.
+- **Expired Cookies:** If the MCP server starts failing API calls (e.g., cannot retrieve list), the cookies have likely expired. Delete the cookie file and re-run `python run.py` to authenticate again.

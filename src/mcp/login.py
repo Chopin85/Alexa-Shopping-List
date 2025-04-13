@@ -1,18 +1,18 @@
-"""Entrypoint script for handling Alexa authentication and cookie generation."""
+"""Script to force login/re-login and generate the Alexa cookie file."""
 
 import logging
-import asyncio
 import sys
+import asyncio
 import os
 from pathlib import Path
 
 # Add src directory to path if running directly
-src_dir = os.path.join(os.path.dirname(__file__), 'src')
+# This helps Python find the alexa_shopping_list package
+src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) # Go up one level from src/mcp
 if os.path.isdir(src_dir) and src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
 try:
-    # Imports needed for login
     from alexa_shopping_list.config import load_config
     from alexa_shopping_list.auth import ensure_authentication
 except ImportError as e:
@@ -20,10 +20,10 @@ except ImportError as e:
     print("Ensure you are running from the project root directory or have installed the package.", file=sys.stderr)
     sys.exit(1)
 
-logger = logging.getLogger(__name__) # Use standard logging
+logger = logging.getLogger(__name__)
 
-async def run_login():
-    """Handles the login/cookie generation process."""
+async def main():
+    """Main function to handle the login process."""
     try:
         config = load_config()
     except EnvironmentError as e:
@@ -55,6 +55,7 @@ async def run_login():
             cookie_file.unlink()
         except OSError as e:
             logger.error(f"Error deleting existing cookie file '{config.cookie_path}': {e}")
+            # Decide if we should proceed or exit? For now, let's try to proceed.
             logger.warning("Proceeding with authentication attempt despite cookie deletion error.")
 
     # Call the authentication function (will trigger browser login)
@@ -62,7 +63,7 @@ async def run_login():
         success = await ensure_authentication(config)
 
         if success:
-            logger.info("Authentication successful. Cookie file saved to '%s'." % config.cookie_path)
+            logger.info("Authentication successful. Cookie file should be saved.")
         else:
             logger.error("Authentication process failed. See previous logs for details.")
             sys.exit(1) # Exit with error if auth failed
@@ -72,14 +73,9 @@ async def run_login():
         sys.exit(1)
 
 if __name__ == "__main__":
-    logger.info("Running Alexa Login Script...")
     try:
-        asyncio.run(run_login())
+        asyncio.run(main())
     except KeyboardInterrupt:
+        # Use basic logger if setup failed earlier
         logging.getLogger().info("Login process interrupted by user.")
         sys.exit(0)
-    except Exception as e:
-        # Catch any other unexpected errors during top-level execution
-        logging.getLogger().exception(f"A critical error occurred in run.py: {e}")
-        sys.exit(1)
-    logger.info("Login script finished.")

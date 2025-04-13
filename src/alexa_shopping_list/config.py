@@ -13,7 +13,6 @@ class AppConfig:
     amazon_url: str
     cookie_path: str
     log_level: str
-    amazon_email: Optional[str] = None
 
 def load_config() -> AppConfig:
     """Loads configuration from environment variables."""
@@ -22,7 +21,6 @@ def load_config() -> AppConfig:
     amazon_url = os.getenv('AMAZON_URL')
     cookie_path = os.getenv('COOKIE_PATH')
     log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
-    amazon_email = os.getenv('AMAZON_EMAIL')
 
     # Validation
     if not amazon_url:
@@ -39,13 +37,11 @@ def load_config() -> AppConfig:
 
     logger.info("Configuration loaded.")
     logger.debug(
-        f"Config: URL={amazon_url}, CookiePath={cookie_path}, LogLevel={log_level}, "
-        f"Email={'Set' if amazon_email else 'Not Set'}"
+        f"Config: URL={amazon_url}, CookiePath={cookie_path}, LogLevel={log_level}"
     )
 
     return AppConfig(
         amazon_url=amazon_url,
         cookie_path=cookie_path,
         log_level=log_level,
-        amazon_email=amazon_email,
     )

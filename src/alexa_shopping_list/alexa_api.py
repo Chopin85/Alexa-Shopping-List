@@ -82,7 +82,8 @@ def make_authenticated_request(
             response = session.post(url, json=payload)
         elif method.upper() == 'DELETE':
             logger.debug(f"DELETE request to {url}")
-            response = session.delete(url)
+            # Allow DELETE with an optional payload (needed for Alexa API)
+            response = session.delete(url, json=payload)
         else:
             logger.error(f"Unsupported method specified: {method}")
             return None
@@ -173,15 +174,16 @@ def delete_shopping_list_item(config: AppConfig, list_item: Dict[str, Any]) -> b
         return False
 
     logger.info(f"Deleting item: {item_value} (ID: {item_id})")
-    # Use the correct endpoint from documentation, appending item ID
-    delete_item_path = f"/alexashoppinglists/api/deletelistitem/{item_id}"
+    # Use the correct base endpoint from documentation
+    delete_item_path = "/alexashoppinglists/api/deletelistitem"
     url = f"{config.amazon_url}{delete_item_path}"
 
+    # Send the item dict (containing ID) as payload
     response = make_authenticated_request(
         url,
         config.cookie_path,
-        method='DELETE'
-        # No payload needed for DELETE
+        method='DELETE',
+        payload=list_item # Send the whole item dict
     )
 
     # Check for successful deletion (often 200 OK or 204 No Content)
