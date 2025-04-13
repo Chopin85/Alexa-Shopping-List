@@ -1,8 +1,18 @@
-# Alexa Shopping List MCP Server
+# Alexa Shopping List
 
-+![Example Usage in Claude Desktop](assets/mcp.png)
-+
- Interact with your Alexa shopping list via MCP. Uses a Dockerized API backend and local scripts for login and MCP communication.
+![Example Usage in Claude Desktop](assets/mcp.png)
+
+## About
+
+Seamlessly manage your Alexa shopping list. Add, remove, and view items instantly.
+Interact with your Alexa shopping list via MCP, using AI assistants like Claude or Cursor.
+
+> [!WARNING]
+> **Requires Manual Authentication & Cookie Refresh**
+>
+> This tool uses browser cookies extracted via a manual login process.
+> Amazon sessions expire.
+> You **will** need to re-run the login script periodically (Step 5 & 6) when the tool stops working.
 
 ## Components
 
@@ -132,3 +142,9 @@ To use this server with an MCP client like Claude Desktop or Cursor, you need to
 
 3.  Save the `mcp.json` file.
 4.  Restart your MCP client. The "Alexa Shopping List MCP" server should now be available.
+
+## Sponsorship
+
+Like this tool? Consider sponsoring the developer:
+
+[![Sponsor TheSethRose](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe64a0)](https://github.com/sponsors/TheSethRose)
