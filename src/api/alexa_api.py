@@ -1,13 +1,14 @@
 """Functions for interacting with the Alexa API (shopping list)."""
 
-import pickle
+import json
 import logging
 import requests
 from http.cookies import SimpleCookie
 from collections import defaultdict
 from typing import Optional, List, Dict, Any
 
-from .config import AppConfig
+# Import the local config module itself
+from . import config as api_config
 
 logger = logging.getLogger(__name__)
 
@@ -25,38 +26,31 @@ DEFAULT_HEADERS = {
 # --- Cookie Handling ---
 
 # Hardcoded path for cookie loading *within the container*
-# This assumes the /auth/cookies endpoint saves the file here.
-CONTAINER_COOKIE_PATH = "/app/data/cookies.pkl"
+# Adjusted for JSON format
+CONTAINER_COOKIE_PATH = "/app/data/cookies.json"
 
-def load_cookies_from_file(cookie_file_path: str) -> Optional[Dict[str, str]]:
-    """Loads cookies from a pickle file."""
+def load_cookies_from_json_file(cookie_file_path: str) -> Optional[List[Dict[str, Any]]]:
+    """Loads cookies from a JSON file (expected list of dicts)."""
     try:
-        with open(cookie_file_path, 'rb') as cookie_file:
-            cookies_data = pickle.load(cookie_file)
+        with open(cookie_file_path, 'r', encoding='utf-8') as f:
+            cookies_list = json.load(f) # Load list of cookie dicts
 
-        # Handle potential different cookie formats saved by alexapy
-        if isinstance(cookies_data, dict):
-             # Assume it's already a simple key-value dict
-             logger.debug(f"Loaded cookies directly as dict from {cookie_file_path}")
-             return cookies_data
-        elif isinstance(cookies_data, defaultdict) and all(
-                isinstance(v, SimpleCookie) for v in cookies_data.values()):
-            # Handle defaultdict format from older alexapy?
-            logger.debug(f"Loaded defaultdict cookie format from {cookie_file_path}, converting.")
-            cookie_dict = {}
-            for domain, simple_cookie in cookies_data.items():
-                for key, morsel in simple_cookie.items():
-                    cookie_dict[key] = morsel.value
-            return cookie_dict
-        else:
-             logger.warning(f"Unknown cookie format loaded from {cookie_file_path}. Type: {type(cookies_data)}")
-             return None
+        if not isinstance(cookies_list, list):
+            logger.error(f"Expected a list in {cookie_file_path}, got {type(cookies_list)}.")
+            return None
+
+        # Return the full list of dictionaries for detailed processing
+        logger.debug(f"Successfully loaded {len(cookies_list)} cookie dicts from JSON: {cookie_file_path}")
+        return cookies_list
 
     except FileNotFoundError:
         logger.error(f"Cookie file not found: {cookie_file_path}")
         return None
+    except json.JSONDecodeError as json_err:
+        logger.error(f"Failed to decode JSON from {cookie_file_path}: {json_err}")
+        return None
     except Exception as err:
-        logger.error(f"Failed to load or parse cookies from {cookie_file_path}: {err}")
+        logger.error(f"Failed to load or parse cookies from JSON file {cookie_file_path}: {err}", exc_info=True)
         return None
 
 # --- API Request Function ---
@@ -71,11 +65,31 @@ def make_authenticated_request(
         session = requests.Session()
         session.headers.update(DEFAULT_HEADERS)
         # Always load from the container path
-        cookies = load_cookies_from_file(CONTAINER_COOKIE_PATH)
-        if not cookies:
+        cookie_list_of_dicts = load_cookies_from_json_file(CONTAINER_COOKIE_PATH)
+
+        if not cookie_list_of_dicts:
             logger.error(f"No cookies loaded from {CONTAINER_COOKIE_PATH} for authenticated request.")
             return None
-        session.cookies.update(cookies)
+
+        # Set cookies individually using requests' set method
+        for cookie_dict in cookie_list_of_dicts:
+            name = cookie_dict.get('name')
+            value = cookie_dict.get('value')
+            domain = cookie_dict.get('domain')
+            path = cookie_dict.get('path')
+
+            if name and value:
+                logger.debug(f"Setting cookie: name={name}, domain={domain}, path={path}")
+                session.cookies.set(
+                    name=name,
+                    value=value,
+                    domain=domain,
+                    path=path
+                    # requests automatically handles secure/expires/httpOnly for its context
+                    # We mainly need name, value, domain, path for session management
+                )
+            else:
+                logger.warning(f"Skipping cookie dict with missing name/value: {cookie_dict}")
 
         logger.debug(f"Making {method} request to {url}")
         if method.upper() == 'GET':
@@ -120,9 +134,9 @@ def filter_incomplete_items(list_items: List[Dict[str, Any]]) -> List[Dict[str, 
     """Filters a list of items to include only those not marked completed."""
     return [item for item in list_items if not item.get('completed', False)]
 
-def get_shopping_list_items(config: AppConfig) -> Optional[List[Dict[str, Any]]]:
+def get_shopping_list_items() -> Optional[List[Dict[str, Any]]]:
     """Gets all items from the Alexa shopping list."""
-    list_items_url = f"{config.amazon_url}/alexashoppinglists/api/getlistitems"
+    list_items_url = f"{api_config.AMAZON_URL}/alexashoppinglists/api/getlistitems"
     # Pass the config but the function now ignores the cookie_path within it
     response = make_authenticated_request(list_items_url, method='GET')
     if response:
@@ -138,12 +152,12 @@ def get_shopping_list_items(config: AppConfig) -> Optional[List[Dict[str, Any]]]
         logger.error("Failed to retrieve shopping list data.")
         return None
 
-def add_shopping_list_item(config: AppConfig, item_value: str) -> bool:
+def add_shopping_list_item(item_value: str) -> bool:
     """Adds a new item to the Alexa shopping list."""
     logger.info(f"Adding item to shopping list: {item_value}")
     # Use the correct endpoint from documentation
     add_item_path = "/alexashoppinglists/api/addlistitem/YW16bjEuYWNjb3VudC5BSERXNEkyVE00U1I0UVQ2VUpINzNWUVpaQU5BLVNIT1BQSU5HX0lURU0="
-    url = f"{config.amazon_url}{add_item_path}"
+    url = f"{api_config.AMAZON_URL}{add_item_path}"
     payload = {
         "value": item_value,
         "type": "TASK" # Assuming 'TASK' type, common for shopping/todo lists
@@ -167,11 +181,11 @@ def add_shopping_list_item(config: AppConfig, item_value: str) -> bool:
              logger.debug(f"Add item response text: {response.text[:500]}")
         return False
 
-def mark_item_as_completed(config: AppConfig, list_item: Dict[str, Any]) -> bool:
+def mark_item_as_completed(list_item: Dict[str, Any]) -> bool:
     """Marks a specific shopping list item as completed via the API."""
-    return _update_item_completion_status(config, list_item, completed_status=True)
+    return _update_item_completion_status(list_item, completed_status=True)
 
-def delete_shopping_list_item(config: AppConfig, list_item: Dict[str, Any]) -> bool:
+def delete_shopping_list_item(list_item: Dict[str, Any]) -> bool:
     """Deletes a specific shopping list item via the API."""
     item_value = list_item.get('value', 'unknown')
     item_id = list_item.get('id')
@@ -183,7 +197,7 @@ def delete_shopping_list_item(config: AppConfig, list_item: Dict[str, Any]) -> b
     logger.info(f"Deleting item: {item_value} (ID: {item_id})")
     # Use the correct base endpoint from documentation
     delete_item_path = "/alexashoppinglists/api/deletelistitem"
-    url = f"{config.amazon_url}{delete_item_path}"
+    url = f"{api_config.AMAZON_URL}{delete_item_path}"
 
     # Send the item dict (containing ID) as payload
     response = make_authenticated_request(
@@ -205,18 +219,18 @@ def delete_shopping_list_item(config: AppConfig, list_item: Dict[str, Any]) -> b
             logger.debug(f"Delete item response text: {response.text[:500]}")
         return False
 
-def unmark_item_as_completed(config: AppConfig, list_item: Dict[str, Any]) -> bool:
+def unmark_item_as_completed(list_item: Dict[str, Any]) -> bool:
     """Unmarks a specific shopping list item as completed via the API."""
-    return _update_item_completion_status(config, list_item, completed_status=False)
+    return _update_item_completion_status(list_item, completed_status=False)
 
-def _update_item_completion_status(config: AppConfig, list_item: Dict[str, Any], completed_status: bool) -> bool:
+def _update_item_completion_status(list_item: Dict[str, Any], completed_status: bool) -> bool:
     """Internal helper to update the completed status of an item."""
     item_value = list_item.get('value', 'unknown')
     action = "Marking" if completed_status else "Unmarking"
     action_past = "marked" if completed_status else "unmarked"
 
     logger.info(f"{action} item as completed: {item_value}")
-    url = f"{config.amazon_url}/alexashoppinglists/api/updatelistitem"
+    url = f"{api_config.AMAZON_URL}/alexashoppinglists/api/updatelistitem"
     list_item_copy = list_item.copy()
     list_item_copy['completed'] = completed_status
 

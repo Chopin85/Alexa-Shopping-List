@@ -4,31 +4,35 @@ FROM python:3.12-slim-bookworm
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
+# Add the root app directory to PYTHONPATH so src.* imports work
 ENV PYTHONPATH="/app"
 
-# Install tini for proper signal handling and process management
+# Install tini for proper signal handling
 RUN apt-get update && apt-get install -y --no-install-recommends tini \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
-WORKDIR /app/src
+WORKDIR /app
 
-# Install Python dependencies
-# Copy only requirements first to leverage Docker cache
-COPY requirements.txt /app/
+# Copy only the API requirements file first to leverage Docker cache
+COPY src/api/requirements.txt ./
+
+# Install API Python dependencies
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r /app/requirements.txt
+    && pip install --no-cache-dir -r requirements.txt
 
-# Copy the application source code into the working directory (/app/src)
-COPY ./src .
+# Copy the entire src directory which contains api, mcp, auth
+# The API needs access to shared modules like config if they exist at the src level
+COPY ./src ./src
 
 # Create the data directory for cookies using an absolute path
+# This assumes the API server might write cookies here, adjust if needed
 RUN mkdir -p /app/data
 
 # Use tini as the entrypoint
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Command to run the application using uvicorn
-# Adjusted app path due to WORKDIR change
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Points to the FastAPI app instance within the copied src structure
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 

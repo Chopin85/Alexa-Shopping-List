@@ -21,3 +21,9 @@ env/
 
 # Example data directory
 app_data_host/
+
+# Build/install artifacts
+*.egg-info/
+
+# Specific configuration files containing secrets
+src/auth/config.py

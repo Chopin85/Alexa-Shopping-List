@@ -1,9 +1,8 @@
 import sys
 import os
 import logging
-from typing import List, Dict, Any
-import pickle # Needed for saving cookies
-import shutil # Needed for saving uploaded file
+from typing import List, Dict, Any, Optional, Union
+import json # Added json for saving cookies
 
 # --- Path Modification ---
 # Add the project root directory to the Python path
@@ -13,13 +12,14 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 # --- End Path Modification ---
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field  # For request body validation
 
-# Import necessary components from your existing code
+# Import necessary components using relative imports
 try:
-    from alexa_shopping_list.config import load_config, AppConfig
-    from alexa_shopping_list.alexa_api import (
+    # Use the new local config
+    from . import config as api_config # Alias to avoid name clashes
+    from .alexa_api import ( # Relative import
         get_shopping_list_items,
         add_shopping_list_item,
         delete_shopping_list_item,
@@ -40,26 +40,16 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Load configuration at startup
-# Use the absolute path derived earlier
-config: AppConfig
-try:
-    logger.info(f"Loading configuration using project_root: {project_root}")
-    config = load_config(project_root=project_root)
-    # Suppress noisy library logs based on loaded config
-    log_level = getattr(logging, config.log_level.upper(), logging.INFO)
-    if log_level > logging.DEBUG:
-        logging.getLogger("urllib3").setLevel(logging.WARNING)
-        logging.getLogger("selenium").setLevel(logging.WARNING)
-        logging.getLogger("webdriver_manager").setLevel(logging.WARNING)
-        logger.debug("Suppressed noisy library logs.")
+# Configure logging based on local config
+logging.basicConfig(level=api_config.LOG_LEVEL_INT, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-except Exception as e:
-    logger.critical(f"FATAL: Failed to load configuration on startup: {e}", exc_info=True)
-    # In a real app, you might want a more robust way to handle this,
-    # but for simplicity, we'll exit if config fails.
-    # Alternatively, raise an exception that FastAPI/Uvicorn might catch.
-    sys.exit("Failed to load application configuration.")
+# Suppress noisy library logs based on loaded config
+if api_config.LOG_LEVEL_INT > logging.DEBUG:
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("selenium").setLevel(logging.WARNING) # Likely not needed here, but safe
+    logging.getLogger("webdriver_manager").setLevel(logging.WARNING) # Likely not needed here
+    logger.debug("Suppressed noisy library logs.")
 
 # --- FastAPI App Instance ---
 app = FastAPI(
@@ -82,6 +72,18 @@ def find_item_by_name(items: List[Dict[str, Any]], name: str) -> Dict[str, Any] 
 class ItemNameModel(BaseModel):
     item_name: str = Field(..., description="The name of the shopping list item.")
 
+# Define a Pydantic model for the expected cookie structure (adjust if needed)
+class CookieModel(BaseModel):
+    name: str
+    value: str
+    domain: Optional[str] = None
+    path: Optional[str] = None
+    # Add missing fields based on what login.py sends
+    expires: Optional[Union[str, int, float]] = None # Allow various types for expiry
+    secure: Optional[bool] = None
+    httpOnly: Optional[bool] = None
+    # sameSite: Optional[str] = None # Could add if needed
+
 # --- API Endpoints ---
 
 @app.get("/", tags=["Status"])
@@ -93,7 +95,7 @@ async def read_root():
 async def get_all_list_items():
     """Retrieves all items (completed and incomplete) from the shopping list."""
     logger.info("Endpoint GET /items/all called.")
-    items = get_shopping_list_items(config)
+    items = get_shopping_list_items()
     if items is None:
         logger.error("Failed to retrieve items from Alexa API.")
         raise HTTPException(status_code=503, detail="Could not retrieve shopping list from Alexa.")
@@ -103,7 +105,7 @@ async def get_all_list_items():
 async def get_incomplete_list_items():
     """Retrieves only the incomplete items from the shopping list."""
     logger.info("Endpoint GET /items/incomplete called.")
-    all_items = get_shopping_list_items(config)
+    all_items = get_shopping_list_items() # No longer needs config passed
     if all_items is None:
         logger.error("Failed to retrieve items from Alexa API.")
         raise HTTPException(status_code=503, detail="Could not retrieve shopping list from Alexa.")
@@ -114,7 +116,7 @@ async def get_incomplete_list_items():
 async def get_completed_list_items():
     """Retrieves only the completed items from the shopping list."""
     logger.info("Endpoint GET /items/completed called.")
-    all_items = get_shopping_list_items(config)
+    all_items = get_shopping_list_items() # No longer needs config passed
     if all_items is None:
         logger.error("Failed to retrieve items from Alexa API.")
         raise HTTPException(status_code=503, detail="Could not retrieve shopping list from Alexa.")
@@ -127,7 +129,7 @@ async def add_new_item(item_data: ItemNameModel):
     """Adds a new item to the shopping list."""
     item_name = item_data.item_name
     logger.info(f"Endpoint POST /items called to add: '{item_name}'")
-    success = add_shopping_list_item(config, item_name)
+    success = add_shopping_list_item(item_name) # No longer needs config passed
     if not success:
         logger.error(f"Failed to add item '{item_name}' via Alexa API.")
         raise HTTPException(status_code=500, detail=f"Failed to add item '{item_name}'.")
@@ -138,14 +140,14 @@ async def remove_item(item_data: ItemNameModel):
     """Deletes an item from the shopping list by name (case-insensitive)."""
     item_name = item_data.item_name
     logger.info(f"Endpoint DELETE /items called for: '{item_name}'")
-    all_items = get_shopping_list_items(config)
+    all_items = get_shopping_list_items() # No longer needs config passed
     item_to_delete = find_item_by_name(all_items or [], item_name)
 
     if not item_to_delete:
         logger.warning(f"Item '{item_name}' not found for deletion.")
         raise HTTPException(status_code=404, detail=f"Item '{item_name}' not found.")
 
-    success = delete_shopping_list_item(config, item_to_delete)
+    success = delete_shopping_list_item(item_to_delete) # No longer needs config passed
     if not success:
         logger.error(f"Failed to delete item '{item_name}' via Alexa API.")
         raise HTTPException(status_code=500, detail=f"Failed to delete item '{item_name}'.")
@@ -156,7 +158,7 @@ async def mark_item_complete(item_data: ItemNameModel):
     """Marks an item as completed by name (case-insensitive)."""
     item_name = item_data.item_name
     logger.info(f"Endpoint PUT /items/mark_completed called for: '{item_name}'")
-    all_items = get_shopping_list_items(config)
+    all_items = get_shopping_list_items() # No longer needs config passed
     # Find an *incomplete* item matching the name
     item_to_mark = find_item_by_name(filter_incomplete_items(all_items or []), item_name)
 
@@ -164,7 +166,7 @@ async def mark_item_complete(item_data: ItemNameModel):
         logger.warning(f"Incomplete item '{item_name}' not found to mark complete.")
         raise HTTPException(status_code=404, detail=f"Incomplete item '{item_name}' not found.")
 
-    success = mark_item_as_completed(config, item_to_mark)
+    success = mark_item_as_completed(item_to_mark) # No longer needs config passed
     if not success:
         logger.error(f"Failed to mark item '{item_name}' completed via Alexa API.")
         raise HTTPException(status_code=500, detail=f"Failed to mark item '{item_name}' as completed.")
@@ -175,7 +177,7 @@ async def mark_item_incomplete_endpoint(item_data: ItemNameModel):
     """Marks an item as incomplete by name (case-insensitive)."""
     item_name = item_data.item_name
     logger.info(f"Endpoint PUT /items/mark_incomplete called for: '{item_name}'")
-    all_items = get_shopping_list_items(config)
+    all_items = get_shopping_list_items() # No longer needs config passed
     # Find a *complete* item matching the name
     completed_items = [item for item in (all_items or []) if item.get('completed', False)]
     item_to_mark = find_item_by_name(completed_items, item_name)
@@ -184,7 +186,7 @@ async def mark_item_incomplete_endpoint(item_data: ItemNameModel):
         logger.warning(f"Completed item '{item_name}' not found to mark incomplete.")
         raise HTTPException(status_code=404, detail=f"Completed item '{item_name}' not found.")
 
-    success = unmark_item_as_completed(config, item_to_mark)  # Use the correct function
+    success = unmark_item_as_completed(item_to_mark)  # No longer needs config passed
     if not success:
         logger.error(f"Failed to mark item '{item_name}' incomplete via Alexa API.")
         raise HTTPException(status_code=500, detail=f"Failed to mark item '{item_name}' as incomplete.")
@@ -192,15 +194,13 @@ async def mark_item_incomplete_endpoint(item_data: ItemNameModel):
 
 # --- Authentication Endpoint ---
 @app.post("/auth/cookies", tags=["Authentication"], status_code=200)
-async def upload_cookies(cookies_file: UploadFile = File(...)):
-    """Accepts a cookies.pkl file upload and saves it to the persistent data volume."""
-    # Ensure the data directory exists (Docker should create it, but double-check)
-    data_dir = os.path.join(project_root, 'data') # Using project_root might be wrong inside Docker, adjust path
-    # Let's use an absolute path within the container where the volume is mounted
-    data_dir_container = "/app/data" # Matches volume mount in docker-compose
-    cookie_path = os.path.join(data_dir_container, "cookies.pkl")
+async def receive_cookies(cookies_data: List[CookieModel]): # Expect a list of CookieModel
+    """Accepts cookies as JSON and saves them to the persistent data volume."""
+    # Use the COOKIE_PATH directly from the local API config
+    cookie_path = api_config.COOKIE_PATH
+    data_dir_container = os.path.dirname(cookie_path) # Get directory from the path
 
-    logger.info(f"Attempting to save uploaded cookie file to: {cookie_path}")
+    logger.info(f"Received {len(cookies_data)} cookies. Attempting to save as JSON to: {cookie_path}")
 
     # Create directory if it doesn't exist
     try:
@@ -210,39 +210,19 @@ async def upload_cookies(cookies_file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Server error: Could not create data directory.")
 
     try:
-        # Save the uploaded file to the target path
-        with open(cookie_path, "wb") as buffer:
-            shutil.copyfileobj(cookies_file.file, buffer)
+        # Convert Pydantic models back to dicts for JSON serialization
+        cookies_list_of_dicts = [cookie.model_dump(exclude_unset=True) for cookie in cookies_data]
 
-        # Optional: Basic validation - try loading the pickle file
-        try:
-            with open(cookie_path, 'rb') as f:
-                _ = pickle.load(f)
-            logger.info(f"Successfully saved and validated cookie file to {cookie_path}")
-            return {"message": "Cookie file uploaded and saved successfully."}
-        except pickle.UnpicklingError as e:
-            logger.error(f"Uploaded file at {cookie_path} is not a valid pickle file: {e}")
-            # Clean up invalid file
-            try:
-                os.remove(cookie_path)
-            except OSError:
-                pass
-            raise HTTPException(status_code=400, detail="Invalid pickle file uploaded.")
-        except Exception as e:
-            logger.error(f"Error loading saved pickle file {cookie_path}: {e}", exc_info=True)
-            # Clean up potentially corrupt file
-            try:
-                os.remove(cookie_path)
-            except OSError:
-                pass
-            raise HTTPException(status_code=500, detail="Server error: Could not validate saved cookie file.")
+        # Save the received cookie list as a JSON file
+        with open(cookie_path, "w", encoding="utf-8") as f:
+            json.dump(cookies_list_of_dicts, f, indent=2)
+
+        logger.info(f"Successfully saved cookie data as JSON to {cookie_path}")
+        return {"message": "Cookie data received and saved successfully."}
 
     except Exception as e:
-        logger.error(f"Failed to save uploaded file to {cookie_path}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to save uploaded file: {e}")
-    finally:
-        # Ensure the uploaded file resource is closed
-        await cookies_file.close()
+        logger.error(f"Failed to save cookie data as JSON to {cookie_path}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save cookie data: {e}")
 
 # --- Optional: Add main block to run with uvicorn for direct execution ---
 if __name__ == "__main__":

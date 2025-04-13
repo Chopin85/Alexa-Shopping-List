@@ -7,18 +7,34 @@ import json
 from typing import List, Dict, Any, Optional, Union
 
 # --- Path Modification ---
-# No longer need to add project root to path since we don't directly import alexa_shopping_list modules
-# Now we just make HTTP requests to our FastAPI server
+# No longer needed as we read API_PORT directly from env
 # --- End Path Modification ---
+
+# Import the local config
+try:
+    from . import config as mcp_config
+except ImportError as e:
+    print(f"Error importing local MCP config: {e}", file=sys.stderr)
+    print("Ensure you are running from the project root or have activated the correct environment.", file=sys.stderr)
+    sys.exit(1)
 
 from fastmcp import FastMCP
 
-# Configure basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Configure logging based on local config
+logging.basicConfig(level=mcp_config.LOG_LEVEL_INT, format='%(asctime)s - %(name)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
 # API server configuration
-API_BASE_URL = "http://127.0.0.1:8000"  # Default URL for the FastAPI server
+# Use base URL directly from local config
+API_BASE_URL = mcp_config.API_BASE_URL
+
+logger.info(f"MCP Server configured to connect to API at: {mcp_config.API_BASE_URL}")
+
+# Suppress noisy library logs based on loaded config
+if mcp_config.LOG_LEVEL_INT > logging.DEBUG:
+    logging.getLogger("requests").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logger.debug("Suppressed noisy library logs.")
 
 # --- FastMCP Server Instance ---
 mcp = FastMCP("Alexa Shopping List")
