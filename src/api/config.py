@@ -13,13 +13,13 @@ COOKIE_PATH = "/app/data/cookies.json"
 
 # Amazon URL for your locale (e.g., amazon.com, amazon.co.uk)
 # Needs to match the one used for login to construct API paths correctly.
-AMAZON_URL = "https://www.amazon.com"
+AMAZON_URL = "https://www.amazon.fr"
 
 # Logging level for the API server
 LOG_LEVEL = "INFO"
 
 # Port the API server listens on inside the container
-API_PORT = 8000
+API_PORT = 8800
 
 # --- Derived --- #
 LOG_LEVEL_INT = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
@@ -46,7 +46,7 @@ LOG_LEVEL_INT = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
 #-    amazon_url = os.getenv("AMAZON_URL")
 #-    cookie_path = os.getenv("COOKIE_PATH", "./alexa_cookie.pickle") # Default local path
 #-    log_level = os.getenv("LOG_LEVEL", "INFO")
-#-    api_port_str = os.getenv("API_PORT", "8000")
+#-    api_port_str = os.getenv("API_PORT", "8800")
 #-
 #-    # Basic validation
 #-    if not amazon_url:
@@ -60,11 +60,11 @@ LOG_LEVEL_INT = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
 #-    try:
 #-        api_port = int(api_port_str)
 #-        if not (1024 <= api_port <= 65535):
-#-             logger.warning(f"Invalid API_PORT '{api_port_str}', using default 8000.")
-#-             api_port = 8000
+#-             logger.warning(f"Invalid API_PORT '{api_port_str}', using default 8800.")
+#-             api_port = 8800
 #-    except ValueError:
-#-        logger.warning(f"Invalid API_PORT '{api_port_str}', using default 8000.")
-#-        api_port = 8000
+#-        logger.warning(f"Invalid API_PORT '{api_port_str}', using default 8800.")
+#-        api_port = 8800
 #-
 #-    return AppConfig(
 #-        amazon_url=amazon_url,

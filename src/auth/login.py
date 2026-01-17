@@ -22,7 +22,7 @@ except ImportError as e:
 logger = logging.getLogger("login_script")  # Renamed logger for clarity
 
 # Constructing URL based on signIn.js structure but with our return_to target
-direct_signin_url = "https://www.amazon.com/"
+direct_signin_url = "https://www.amazon.fr/"
 
 async def post_cookies_to_api(cookies_for_requests: List[Dict]):
     """Posts the cookies (in requests format) to the API endpoint as JSON."""

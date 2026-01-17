@@ -45,7 +45,7 @@ Adjust settings in the `config.py` file within each component directory:
 - `src/auth/config.py`: Login script settings (Amazon URL, API location, **EMAIL/PASSWORD**).
 - `src/mcp/config.py`: MCP server settings (API location).
 
-*Ensure `AMAZON_URL` matches your region and **set your `AMAZON_EMAIL` and `AMAZON_PASSWORD` in `src/auth/config.py`**.* You only need to set these temporarily for the login script to know which Amazon URL to open; the script no longer uses them automatically.
+_Ensure `AMAZON_URL` matches your region and **set your `AMAZON_EMAIL` and `AMAZON_PASSWORD` in `src/auth/config.py`**._ You only need to set these temporarily for the login script to know which Amazon URL to open; the script no longer uses them automatically.
 
 **3. Start API Server Container**
 
@@ -55,7 +55,7 @@ Builds the image and runs the API server in the background.
 docker compose up --build -d alexa_api
 ```
 
-*(Use `docker compose logs -f alexa_api` to view logs; `docker compose down` to stop.)*
+_(Use `docker compose logs -f alexa_api` to view logs; `docker compose down` to stop.)_
 
 **4. Set Up Local Environment & Install Auth Dependencies**
 
@@ -87,29 +87,29 @@ The script will then attempt to extract the session cookies and send them to the
 
 Verify the API server received the cookies and can access your list by opening this URL in your browser (or using `curl`):
 
-[http://127.0.0.1:8000/items/all](http://127.0.0.1:8000/items/all)
+[http://127.0.0.1:8800/items/all](http://127.0.0.1:8800/items/all)
 
 You should see a JSON response containing your current Alexa shopping list items. If you get an error (like 401 Unauthorized or 503 Service Unavailable), check the API logs (`docker compose logs alexa_api`) and potentially rerun steps 5 & 6.
 
-*   **API Documentation:** FastAPI automatically generates interactive documentation. You can explore all available endpoints and test them directly in your browser at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+- **API Documentation:** FastAPI automatically generates interactive documentation. You can explore all available endpoints and test them directly in your browser at [http://127.0.0.1:8800/docs](http://127.0.0.1:8800/docs).
 
 ## Troubleshooting
 
 - **MCP Server Issues:**
-    - `spawn ENOENT` (Claude Desktop): Verify absolute paths in `mcp.json`.
-    - Connection Errors/Disconnects: Check API container logs (`docker compose logs alexa_api`). Ensure API container is running and accessible (check `src/mcp/config.py`).
-    - Import Errors: Ensure dependencies installed in the correct venv (`uv pip install -r src/mcp/requirements.txt`).
+  - `spawn ENOENT` (Claude Desktop): Verify absolute paths in `mcp.json`.
+  - Connection Errors/Disconnects: Check API container logs (`docker compose logs alexa_api`). Ensure API container is running and accessible (check `src/mcp/config.py`).
+  - Import Errors: Ensure dependencies installed in the correct venv (`uv pip install -r src/mcp/requirements.txt`).
 - **API Container Issues:**
-    - Startup Failure: Check logs (`docker compose logs alexa_api`).
-    - Config Errors: Verify settings in `src/api/config.py`.
-    - Port Conflicts: Ensure host port `8000` (or mapped port) is free.
+  - Startup Failure: Check logs (`docker compose logs alexa_api`).
+  - Config Errors: Verify settings in `src/api/config.py`.
+  - Port Conflicts: Ensure host port `8800` (or mapped port) is free.
 - **Login Script Issues (`src/auth/login.py`):**
-    - Import Errors: Ensure dependencies installed (`uv pip install -r src/auth/requirements.txt`).
-    - `ModuleNotFoundError: No module named 'distutils'` (on Python 3.12+): Ensure `setuptools` is included in `src/auth/requirements.txt` and dependencies are reinstalled.
-    - WebDriver Errors: Ensure Chrome is installed/updated. Check `nodriver` compatibility.
-    - Cookie Errors: Occurs if login fails or cookies cannot be extracted after successful login.
-    - API Connection Error: Ensure API container is running and reachable (check `src/auth/config.py`). Check `docker compose logs alexa_api`.
-    - Login Failures: Verify credentials in `src/auth/config.py`. Check for unexpected page changes or Captcha/2FA prompts mentioned in logs or screenshots. Amazon might change selectors (`#ap_email`, `#signInSubmit`, etc.).
+  - Import Errors: Ensure dependencies installed (`uv pip install -r src/auth/requirements.txt`).
+  - `ModuleNotFoundError: No module named 'distutils'` (on Python 3.12+): Ensure `setuptools` is included in `src/auth/requirements.txt` and dependencies are reinstalled.
+  - WebDriver Errors: Ensure Chrome is installed/updated. Check `nodriver` compatibility.
+  - Cookie Errors: Occurs if login fails or cookies cannot be extracted after successful login.
+  - API Connection Error: Ensure API container is running and reachable (check `src/auth/config.py`). Check `docker compose logs alexa_api`.
+  - Login Failures: Verify credentials in `src/auth/config.py`. Check for unexpected page changes or Captcha/2FA prompts mentioned in logs or screenshots. Amazon might change selectors (`#ap_email`, `#signInSubmit`, etc.).
 - **Tool Errors (401 Unauthorized):** Login failed or cookies expired. Rerun the login script (`python -m src.auth.login`). Ensure credentials in `src/auth/config.py` are correct and check `auth` logs for any 2FA/Captcha issues during the last run.
 
 ## Connecting an MCP Client (Claude Desktop / Cursor)
@@ -137,8 +137,8 @@ To use this server with an MCP client like Claude Desktop or Cursor, you need to
 
 **IMPORTANT:**
 
-*   You **MUST** replace the placeholder absolute paths `/path/to/your/alexa-mcp` in the `command`, `workingDirectory`, and `env.PYTHONPATH` fields with the actual absolute path to **your** project directory on your machine.
-*   Ensure the `.venv` virtual environment exists at that location and has the MCP dependencies installed (`uv pip install -r src/mcp/requirements.txt`).
+- You **MUST** replace the placeholder absolute paths `/path/to/your/alexa-mcp` in the `command`, `workingDirectory`, and `env.PYTHONPATH` fields with the actual absolute path to **your** project directory on your machine.
+- Ensure the `.venv` virtual environment exists at that location and has the MCP dependencies installed (`uv pip install -r src/mcp/requirements.txt`).
 
 3.  Save the `mcp.json` file.
 4.  Restart your MCP client. The "Alexa Shopping List MCP" server should now be available.

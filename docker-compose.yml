@@ -5,14 +5,14 @@ services:
       dockerfile: Dockerfile # Use the new Dockerfile at the root
     container_name: shopping_list_api
     ports:
-      # Map host port 8000 to container port 8000 (which is defined in src/api/config.py)
-      - "8000:8000"
+      # Map host port 8800 to container port 8800 (which is defined in src/api/config.py)
+      - "8800:8800"
     volumes:
       # Use a named volume for persistent data (e.g., cookies)
-      - cookie_data:/app/data
+      - ./cookie_data:/app/data
     # Healthcheck to ensure the application is running
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"] # Use the root endpoint
+      test: ["CMD", "curl", "-f", "http://localhost:8800/"] # Use the root endpoint
       interval: 30s
       timeout: 10s
       retries: 3

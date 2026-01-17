@@ -34,5 +34,5 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Command to run the application using uvicorn
 # Points to the FastAPI app instance within the copied src structure
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8800"]
 

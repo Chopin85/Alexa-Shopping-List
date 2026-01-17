@@ -27,3 +27,4 @@ app_data_host/
 
 # Custom Exclusions
 .cursor/
+cookie_data/cookies.json

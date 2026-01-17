@@ -86,8 +86,8 @@ async def perform_keep_alive():
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting keep-alive scheduler...")
-    # Schedule the job to run every 60 seconds
-    scheduler.add_job(perform_keep_alive, 'interval', seconds=60, id='keep_alive_job')
+    # Schedule the job to run every 600 seconds (10 minutes)
+    scheduler.add_job(perform_keep_alive, 'interval', seconds=600, id='keep_alive_job')
     scheduler.start()
     yield
     # Shutdown
@@ -275,4 +275,4 @@ if __name__ == "__main__":
     # Note: Host '0.0.0.0' makes it accessible on your network
     # Use '127.0.0.1' for local access only
     # Reload=True is for development, disable for production
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8800, reload=True)

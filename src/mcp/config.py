@@ -7,7 +7,7 @@ LOG_LEVEL = "INFO"
 # Host and Port where the API container is running
 # Assumes API container is accessible on localhost from where MCP server runs
 API_HOST = "localhost"
-API_PORT = 8000
+API_PORT = 8800
 
 # --- Derived --- #
 LOG_LEVEL_INT = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
